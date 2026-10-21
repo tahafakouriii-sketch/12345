@@ -75,7 +75,7 @@ class MainActivity : Activity() {
         landing.addView(text("از اینجا به دوره‌های مجاز، حساب کاربری و آموزش‌ها دسترسی داری.", 15f, Color.DKGRAY))
         landing.addView(text("آزمایش نخست: اقتصاد به زبان ساده • دوره ۱۷۴", 16f, Color.rgb(67, 131, 77)))
         landing.addView(action("ورود به خانه و دوره‌های من") { open("$site/my-account/") })
-        landing.addView(action("بررسی دوره ۱۷۴") { open("$site/product/ecomics-made-easy/") })
+        landing.addView(action("بررسی دوره ۱۷۴") { open("$site/?shipaa_learning_app=1&course_id=174") })
         landing.addView(action("مشاهده همه دوره‌ها") { open("$site/shop/") })
         landing.addView(text("پخش جلسات پولی فقط از مسیر مجاز سایت انجام می‌شود. اتصال پلیر اختصاصی و همگام‌سازی پیشرفت در نسخه آزمایشی بعدی تکمیل می‌شود.", 13f, Color.GRAY))
         root.addView(landing, LinearLayout.LayoutParams(-1, 0, 1f))

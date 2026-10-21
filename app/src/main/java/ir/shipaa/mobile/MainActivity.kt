@@ -120,8 +120,8 @@ class MainActivity : Activity() {
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, newProgress: Int) {
-                    progress.progress = newProgress
-                    progress.visibility = if (newProgress >= 100 || fullscreenView != null) View.GONE else View.VISIBLE
+                    this@MainActivity.progress.progress = newProgress
+                    this@MainActivity.progress.visibility = if (newProgress >= 100 || fullscreenView != null) View.GONE else View.VISIBLE
                 }
                 override fun onShowCustomView(view: View, callback: CustomViewCallback) {
                     if (fullscreenView != null) { callback.onCustomViewHidden(); return }
@@ -131,7 +131,7 @@ class MainActivity : Activity() {
                     browser.visibility = View.GONE
                     header.visibility = View.GONE
                     bottomBar.visibility = View.GONE
-                    progress.visibility = View.GONE
+                    this@MainActivity.progress.visibility = View.GONE
                     errorOverlay.visibility = View.GONE
                 }
                 override fun onHideCustomView() { exitFullscreen() }

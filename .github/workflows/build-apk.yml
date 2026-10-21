@@ -2,7 +2,7 @@ name: Build Shipaa APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/course-174-learning-v04]
     paths:
       - 'app/**'
       - '*.gradle.kts'

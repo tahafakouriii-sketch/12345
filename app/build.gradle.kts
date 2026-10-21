@@ -6,8 +6,8 @@ android {
         applicationId = "ir.shipaa.mobile"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0-pilot"
+        versionCode = 4
+        versionName = "0.4.1-learning-pilot"
     }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

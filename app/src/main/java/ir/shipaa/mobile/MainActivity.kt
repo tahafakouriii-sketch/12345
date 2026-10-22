@@ -35,6 +35,16 @@ class MainActivity : Activity() {
     private lateinit var native: LinearLayout
     private lateinit var nav: LinearLayout
     private lateinit var browser: WebView
+    private lateinit var webProgress: ProgressBar
+    private lateinit var webError: LinearLayout
+    private var autoEnterLearning = true
+    private var lastAuthCookie = ""
+    private val loginWatch = object : Runnable {
+        override fun run() {
+            if (!stopped && web && autoEnterLearning) checkWebSession()
+            main.postDelayed(this, 2000)
+        }
+    }
     private lateinit var playerView: PlayerView
     private lateinit var info: TextView
     private lateinit var status: TextView
@@ -77,7 +87,7 @@ class MainActivity : Activity() {
                     insets.systemWindowInsetRight, insets.systemWindowInsetBottom); insets
             }
         }
-        title = label("شیپا  ·  خانه یادگیری", 21f).apply { setTextColor(green) }
+        title = label("شیپا", 22f).apply { setTextColor(green) }
         root.addView(title)
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -105,6 +115,8 @@ class MainActivity : Activity() {
         browser = WebView(this).apply {
             visibility = View.GONE
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true
+            settings.loadWithOverviewMode = true; settings.useWideViewPort = true
+            settings.setSupportMultipleWindows(false)
             settings.allowFileAccess = false; settings.allowContentAccess = false
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.javaScriptCanOpenWindowsAutomatically = false
@@ -116,7 +128,7 @@ class MainActivity : Activity() {
                     val u = r.url
                     if (trusted(u)) {
                         if (u.getQueryParameter("shipaa_learning_app") == "1" && u.getQueryParameter("course_id") == "174") {
-                            home(); return true
+                            autoEnterLearning = true; lastAuthCookie = ""; checkWebSession(); return true
                         }
                         return false
                     }
@@ -125,12 +137,28 @@ class MainActivity : Activity() {
                     }
                     return true
                 }
-                override fun onPageFinished(v: WebView, url: String?) { CookieManager.getInstance().flush() }
+                override fun onPageStarted(v: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    if(web) { webError.visibility = View.GONE; webProgress.visibility = View.VISIBLE }
+                }
+                override fun onPageFinished(v: WebView, url: String?) {
+                    CookieManager.getInstance().flush(); webProgress.visibility = View.GONE
+                    if(web && autoEnterLearning && url != null && trusted(Uri.parse(url))) checkWebSession()
+                }
+                override fun onReceivedHttpError(v: WebView, r: WebResourceRequest, response: WebResourceResponse) {
+                    if(r.isForMainFrame) showWebError("صفحه حساب پاسخ نداد (${response.statusCode}).")
+                }
+                override fun onReceivedSslError(v: WebView, handler: SslErrorHandler, error: android.net.http.SslError) {
+                    handler.cancel(); showWebError("اتصال امن به سایت برقرار نشد.")
+                }
                 override fun onReceivedError(v: WebView, r: WebResourceRequest, e: WebResourceError) {
-                    if (r.isForMainFrame) Toast.makeText(this@MainActivity, "اتصال برقرار نشد؛ برای تلاش دوباره به یادگیری برگرد.", Toast.LENGTH_LONG).show()
+                    if (r.isForMainFrame) showWebError("اتصال به شیپا برقرار نشد. اینترنت را بررسی کن.")
                 }
             }
             webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(v: WebView, progress: Int) {
+                    webProgress.progress = progress
+                    webProgress.visibility = if(web && progress < 100 && webError.visibility != View.VISIBLE) View.VISIBLE else View.GONE
+                }
                 override fun onShowCustomView(v: View, cb: CustomViewCallback) {
                     if (htmlFull != null) { cb.onCustomViewHidden(); return }
                     htmlFull = v; htmlCallback = cb
@@ -140,7 +168,18 @@ class MainActivity : Activity() {
             }
         }
         content.addView(browser, FrameLayout.LayoutParams(-1, -1))
-        setContentView(root); render(); refresh(true)
+        webProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            progressTintList = android.content.res.ColorStateList.valueOf(green)
+        }
+        content.addView(webProgress, FrameLayout.LayoutParams(-1, dp(3), Gravity.TOP))
+        webError = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
+            setPadding(dp(28), dp(28), dp(28), dp(28)); setBackgroundColor(pale); visibility = View.GONE
+        }
+        content.addView(webError, FrameLayout.LayoutParams(-1, -1))
+        setContentView(root)
+        openWeb("https://shipaa.ir/my-account/", true)
+        main.postDelayed(loginWatch, 2000)
         main.postDelayed(tick, 15000); main.postDelayed(verify, 60000)
     }
     private fun trusted(u: Uri) = u.scheme == "https" && u.host in listOf("shipaa.ir", "www.shipaa.ir") && (u.port == -1 || u.port == 443)
@@ -162,13 +201,21 @@ class MainActivity : Activity() {
     private fun done(l: JSONObject) = (l.optJSONObject("progress")?.optBoolean("completed") ?: false) || prefs.getBoolean(key(l.getString("id"))+":done", false)
     private fun render() {
         if (web) return
+        info.visibility = if(player != null) View.VISIBLE else View.GONE
+        status.visibility = if(status.text.isNotBlank()) View.VISIBLE else View.GONE
         list.removeAllViews()
-        for (i in 0 until nav.childCount) (nav.getChildAt(i) as TextView).setTextColor(if ((nav.getChildAt(i) as TextView).text == tab) green else ink)
+        for (i in 0 until nav.childCount) {
+            val item = nav.getChildAt(i) as TextView
+            val selected = item.text == tab
+            item.setTextColor(if(selected) green else Color.rgb(116,126,119))
+            item.setTypeface(null, if(selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            item.setBackgroundColor(if(selected) Color.rgb(238,247,232) else Color.WHITE)
+        }
         val s = session
         if (s == null) {
             info.text = "یادگیری با شیپا"
             list.addView(label("دوره آزمایشی: اقتصاد به زبان ساده", 22f))
-            button("ورود به حساب شیپا") { openWeb("https://shipaa.ir/my-account/") }
+            button("ورود به حساب شیپا") { openWeb("https://shipaa.ir/my-account/", true) }
             button("وارد شده‌ام؛ دریافت دوره", Color.rgb(230, 241, 255)) { refresh(true) }
             button("رفتن به سایت", Color.rgb(239, 232, 250)) { openWeb("https://shipaa.ir/") }
             return
@@ -199,16 +246,43 @@ class MainActivity : Activity() {
                     list.addView(label(s.course.getString("title"), 24f))
                     val last = prefs.getString("${s.user.optLong("id")}:last", null)
                     val next = lessons.firstOrNull { it.optString("id") == last && !done(it) } ?: lessons.firstOrNull { !done(it) } ?: lessons.firstOrNull()
-                    if(next != null) button("ادامه یادگیری  ←\n${next.getString("title")}") { play(next.getString("id")) }
+                    if(next != null) button("▶  ادامه یادگیری\n${next.getString("title")}") { play(next.getString("id")) }
+                    list.addView(label("جلسه‌های این دوره", 15f))
                 }
                 lessons.forEachIndexed { i, l ->
-                    button("${i+1}. ${l.getString("title")} ${if(done(l)) "✓" else ""}\n${l.optString("summary")}", Color.rgb(230, 241, 255)) { play(l.getString("id")) }
+                    lessonCard(i, l)
                 }
                 if (lessons.isEmpty()) list.addView(label("هنوز جلسه‌ای برای این دوره ثبت نشده است."))
                 button("تازه‌سازی", Color.rgb(239, 232, 250)) { refresh(true) }
             }
         }
         list.alpha = 0.5f; list.animate().alpha(1f).setDuration(180).start()
+    }
+    private fun lessonCard(index: Int, lesson: JSONObject) {
+        val selected = lesson.optString("id") == activeId
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(16), dp(14), dp(16))
+            background = GradientDrawable().apply {
+                setColor(if(selected) Color.rgb(238,247,232) else Color.WHITE)
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), if(selected) green else Color.rgb(229,235,227))
+            }
+            layoutParams = LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(9) }
+            setOnClickListener { play(lesson.getString("id")) }
+        }
+        row.addView(label((index+1).toString(), 20f).apply {
+            gravity = Gravity.CENTER; setPadding(0,0,0,0); setTextColor(green)
+            background = GradientDrawable().apply { setColor(Color.rgb(239,245,235)); cornerRadius=dp(14).toFloat() }
+        }, LinearLayout.LayoutParams(dp(46),dp(46)))
+        val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        details.addView(label(lesson.getString("title"),17f).apply {
+            setTypeface(null,android.graphics.Typeface.BOLD); setPadding(dp(12),0,dp(12),dp(6))
+        })
+        details.addView(label(if(done(lesson)) "تکمیل شده ✓" else if(selected) "در حال یادگیری" else if(seconds(lesson)>0) "ادامه از دقیقه ${seconds(lesson)/60}" else "آماده شروع",12f).apply {
+            setTextColor(Color.rgb(109,126,112)); setPadding(dp(12),0,dp(12),0)
+        })
+        row.addView(details, LinearLayout.LayoutParams(0,-2,1f)); list.addView(row)
     }
     private fun showAvatar(user: JSONObject) {
         val uid = user.getLong("id")
@@ -297,7 +371,7 @@ class MainActivity : Activity() {
         }
         release(); activeId = id
         prefs.edit().putString("${session!!.user.getLong("id")}:last", id).apply()
-        info.text = lesson.getString("title")
+        info.text = lesson.getString("title"); info.visibility = View.VISIBLE; status.visibility = View.VISIBLE
         val p = ExoPlayer.Builder(this).setSeekBackIncrementMs(10000).setSeekForwardIncrementMs(10000).build()
         player = p; playerView.player = p; playerView.visibility = View.VISIBLE
         p.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
@@ -369,16 +443,64 @@ class MainActivity : Activity() {
         playerView.player = null; old?.release(); playerView.visibility = View.GONE
         playerView.keepScreenOn = false
     }
-    private fun openWeb(url: String) {
+    private fun openWeb(url: String, enterLearning: Boolean = false) {
         saveProgress(); release(); generation++; busy = false; session = null; lessons = emptyList()
+        autoEnterLearning = enterLearning; lastAuthCookie = ""
         web = true; native.visibility = View.GONE; title.visibility = View.GONE; nav.visibility = View.GONE
         browser.visibility = View.VISIBLE; browser.onResume(); browser.loadUrl(url)
-        Toast.makeText(this, "پس از ورود، با دکمه بازگشت گوشی به یادگیری برگرد.", Toast.LENGTH_LONG).show()
+        webError.visibility = View.GONE; webProgress.visibility = View.VISIBLE
     }
     private fun home() {
-        closeHtml(); browser.loadUrl("about:blank"); browser.onPause(); browser.visibility = View.GONE
+        closeHtml(); autoEnterLearning = false; webProgress.visibility = View.GONE; webError.visibility = View.GONE; browser.loadUrl("about:blank"); browser.onPause(); browser.visibility = View.GONE
         web = false; native.visibility = View.VISIBLE; title.visibility = View.VISIBLE; nav.visibility = View.VISIBLE
         render(); refresh(true)
+    }
+    private fun showWebError(message: String) {
+        if (!web) return
+        webProgress.visibility = View.GONE; webError.removeAllViews()
+        webError.addView(label("ارتباط با شیپا", 23f))
+        webError.addView(label(message, 16f))
+        webError.addView(Button(this).apply {
+            text = "تلاش دوباره"; setOnClickListener {
+                webError.visibility = View.GONE; lastAuthCookie = ""
+                browser.reload()
+            }
+        })
+        webError.visibility = View.VISIBLE
+    }
+    private fun checkWebSession() {
+        if(!web || !autoEnterLearning || busy || stopped) return
+        val address = browser.url ?: return
+        if(!trusted(Uri.parse(address))) return
+        val cookie = CookieManager.getInstance().getCookie("https://shipaa.ir/wp-json/") ?: ""
+        if(!cookie.split(";").any { it.trim().startsWith("wordpress_logged_in_") } || cookie == lastAuthCookie) return
+        lastAuthCookie = cookie; busy = true
+        val g = generation
+        worker.execute {
+            try {
+                val result = api.session()
+                main.post {
+                    if(g != generation || isDestroyed) return@post
+                    busy = false
+                    if(!web || !autoEnterLearning || stopped) { lastAuthCookie = ""; return@post }
+                    // Keep the login form and dashboard until both identity and course access succeed.
+                    session = result
+                    val array = result.course.getJSONArray("lessons")
+                    lessons = (0 until array.length()).map { array.getJSONObject(it) }
+                    autoEnterLearning = false; web = false
+                    browser.onPause(); browser.visibility = View.GONE
+                    webProgress.visibility = View.GONE; webError.visibility = View.GONE
+                    native.visibility = View.VISIBLE; title.visibility = View.VISIBLE; nav.visibility = View.VISIBLE
+                    status.text = ""; render(); flushPending()
+                }
+            } catch(_: Exception) {
+                main.post {
+                    if(g == generation && !isDestroyed) busy = false
+                    // Do not replace a usable WordPress account with an unverified native screen.
+                    // Retry on a changed login session or explicit reload, never loop REST requests.
+                }
+            }
+        }
     }
     private fun closeHtml() {
         htmlFull?.let { content.removeView(it) }; htmlFull = null
@@ -398,7 +520,7 @@ class MainActivity : Activity() {
     }
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        when { htmlFull != null -> closeHtml(); fullscreen -> setFull(false); web && browser.canGoBack() -> browser.goBack(); web -> home(); player != null -> { saveProgress(); release(); render() }; else -> super.onBackPressed() }
+        when { htmlFull != null -> closeHtml(); fullscreen -> setFull(false); web && browser.canGoBack() -> browser.goBack(); web && session == null -> super.onBackPressed(); web -> home(); player != null -> { saveProgress(); release(); render() }; else -> super.onBackPressed() }
     }
     override fun onStop() {
         saveProgress(); player?.pause(); stopped = true

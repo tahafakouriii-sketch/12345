@@ -39,7 +39,7 @@ jobs:
           ls -lh app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: shipaa-mobile-v0.5.0-native-debug-apk
+          name: shipaa-mobile-v0.5.1-account-entry-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

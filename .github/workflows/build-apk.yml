@@ -2,7 +2,7 @@ name: Build Shipaa APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/course-174-learning-v04]
     paths:
       - 'app/**'
       - '*.gradle.kts'
@@ -31,7 +31,7 @@ jobs:
           curl -fLsS https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
       - name: Compile debug APK
-        run: /tmp/gradle-8.9/bin/gradle :app:assembleDebug --no-daemon --stacktrace
+        run: /tmp/gradle-8.9/bin/gradle :app:assembleDebug :app:lintDebug --no-daemon --stacktrace
       - name: Verify APK
         run: |
           test -s app/build/outputs/apk/debug/app-debug.apk
@@ -39,7 +39,7 @@ jobs:
           ls -lh app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: shipaa-mobile-v0.3-debug-apk
+          name: shipaa-mobile-v0.5.1-account-entry-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
